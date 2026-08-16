@@ -1,3 +1,11 @@
+/*
+ * Pack reader. See lp_pack.h for the format and ownership rules.
+ *
+ * Level planes arrive PackBits-compressed and are expanded through a bounded
+ * streaming reader: a small fixed window pulled through the caller's LPReader,
+ * never the whole compressed level at once. That keeps loading allocation-free
+ * and gives the device the same code path the host tests exercise.
+ */
 #include "lp_pack.h"
 
 #include <string.h>

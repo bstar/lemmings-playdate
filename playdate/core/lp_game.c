@@ -1,3 +1,20 @@
+/*
+ * The simulation. See lp_game.h for the interface and the invariants.
+ *
+ * Layout: bit-plane helpers, then terrain edits, then one function per lemming
+ * state, then process() which dispatches a single lemming for one tick, then
+ * lp_game_tick() which drives release, objects, the clock, and the nuke.
+ *
+ * Two rules run through all of it. Distances are real source pixels, so a
+ * constant means the same thing regardless of presentation scale or of how
+ * fast a state moves. And terrain is edited only through lp_game_set_ground,
+ * which keeps the collision plane and every visual plane in step and refuses
+ * to clear steel.
+ *
+ * Where behaviour looks arbitrary it is usually reproducing the original
+ * game. Those places carry a comment saying so, because they are exactly the
+ * ones that look like bugs worth fixing.
+ */
 #include "lp_game.h"
 
 #include <limits.h>

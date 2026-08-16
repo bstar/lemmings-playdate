@@ -1,3 +1,9 @@
+/*
+ * Unlock and completion rules. See lp_progress.h.
+ *
+ * Pure functions over a bitfield the caller owns, with no I/O and no state,
+ * which is what makes the unlock rule directly testable.
+ */
 #include "lp_progress.h"
 
 int lp_progress_completed(const uint8_t completed[LP_COMPLETION_BYTES], unsigned index) {

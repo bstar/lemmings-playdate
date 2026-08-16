@@ -1,3 +1,17 @@
+/*
+ * DOS AdLib driver. See lp_adlib.h for the threading and rate model.
+ *
+ * The DOS sound image holds a command stream per song, not audio. This file
+ * interprets it: per-channel state advances on the driver's own tick, emitting
+ * OPL2 register writes to lp_dbopl, which synthesizes.
+ *
+ * Layout: the OPL wrapper with its resampler and filter, then the per-channel
+ * command interpreter, then the ring buffer that separates the producer from
+ * the audio callback.
+ *
+ * Offsets into the sound image are facts about the original data. They are
+ * named rather than inlined so the correspondence stays visible.
+ */
 #include "lp_adlib.h"
 #include "lp_dbopl.h"
 

@@ -1,3 +1,10 @@
+/*
+ * Level to song mapping and loop points. See lp_music.h.
+ *
+ * The mapping follows the original rotation rather than a formula, so it is a
+ * table. Loop boundaries were measured from the DOS command stream and are
+ * stored as seconds for the platform layer to seek with.
+ */
 #include "lp_music.h"
 
 unsigned lp_music_for_level(unsigned level_index) {

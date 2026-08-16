@@ -1,3 +1,28 @@
+/*
+ * Playdate adapter.
+ *
+ * Everything platform-specific lives here: input, drawing, audio, storage,
+ * the system menu, and the screens around a level. The simulation itself is
+ * in playdate/core and knows nothing about any of this, which is what lets
+ * the host build and the unit tests run the identical rules.
+ *
+ * Each update() call reads buttons and crank, advances the simulation by
+ * whole ticks of accumulated real time, drains the sound events the tick
+ * produced, and redraws. Simulation time is accumulated rather than assumed,
+ * so a slow frame does not slow the game down, and time spent in menus is
+ * discarded rather than replayed as a catch-up burst.
+ *
+ * Drawing works in source pixels and scales on the way out. The detail view
+ * is an exact 2x crop that follows the cursor, so every source pixel becomes
+ * a uniform block and nothing shimmers when scrolling.
+ *
+ * Audio is produced ahead on this thread into lp_adlib's ring buffer, and the
+ * SDK callback only copies from it. Sound effects are preloaded samples
+ * played through a small voice pool, so no file I/O happens at trigger time.
+ *
+ * Progress is a bitfield persisted to save.dat. A TEST_UNLOCK build never
+ * writes it; see LP_TEST_BUILD below.
+ */
 #include "pd_api.h"
 
 #include "lp_adlib.h"
@@ -125,6 +150,8 @@ static void set_dither_menu_visible(int visible) {
     }
 }
 
+/* ---- Asset and audio loading ---------------------------------------- */
+
 static int file_read_at(void* context, uint32_t offset, void* output, size_t size) {
     App* state = context;
     return state->pd->file->seek(state->asset_file, (int)offset, SEEK_SET) == 0 &&
@@ -241,6 +268,8 @@ static int load_effects(void) {
     return 1;
 }
 
+/* ---- Level loading and camera bounds --------------------------------- */
+
 static void find_content_bounds(void) {
     int x, y, left = LP_LEVEL_WIDTH, right = -1;
     unsigned i;
@@ -352,6 +381,8 @@ static void begin_game(void) {
     play_effect(LP_SOUND_LETS_GO);
 }
 
+/* ---- System menu ----------------------------------------------------- */
+
 static void menu_levels(void* userdata) {
     (void)userdata;
     open_level_select();
@@ -375,6 +406,8 @@ static void menu_ground(void* userdata) {
     (void)userdata;
     app.ground_mode = app.pd->system->getMenuItemValue(app.ground_menu);
 }
+
+/* ---- Saved progress and version -------------------------------------- */
 
 static void load_progress(void) {
     SDFile* file;
@@ -422,6 +455,8 @@ static void save_progress(void) {
     app.pd->file->write(file, &app.save, sizeof app.save);
     app.pd->file->close(file);
 }
+
+/* ---- Framebuffer and world drawing ----------------------------------- */
 
 static int world_ink(int x, int y) {
     const uint8_t* plane;
@@ -630,6 +665,8 @@ static void render_world(void) {
     app.pd->graphics->markUpdatedRows(0, LCD_ROWS - 1);
 }
 
+/* ---- Title, credits and level browser -------------------------------- */
+
 static void render_logo(void) {
     char line[48];
     int width = 0, height = 0;
@@ -772,6 +809,8 @@ static void render_result(void) {
         won ? 25 : 10, kASCIIEncoding, won ? 92 : 152, 155);
     app.pd->graphics->drawText("MENU: RETURN TO LEVEL SELECT", 28, kASCIIEncoding, 84, 195);
 }
+
+/* ---- Action panel ---------------------------------------------------- */
 
 static void draw_action_tile(uint8_t* frame, unsigned action, int origin_x, int origin_y) {
     const uint32_t* rows = action < 2 ? lynx_release_rows :
@@ -924,6 +963,8 @@ static void render_actions(void) {
         draw_centered_game_text("A SELECT   B BACK   CRANK RR", 220);
     app.pd->graphics->markUpdatedRows(0, LCD_ROWS - 1);
 }
+
+/* ---- Input and the main update loop ---------------------------------- */
 
 static void move_cursor(PDButtons current) {
     int dx = !!(current & kButtonRight) - !!(current & kButtonLeft);

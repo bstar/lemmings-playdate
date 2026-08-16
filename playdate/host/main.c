@@ -1,3 +1,13 @@
+/*
+ * Host harness: runs the simulation without a Playdate.
+ *
+ * Loads a pack, then either smoke-simulates every level checking invariants,
+ * or runs one level for a fixed number of ticks. Its value is that it links
+ * the same lp_game the device runs, so a rules change can be exercised in a
+ * second from a terminal rather than through a device build.
+ *
+ * Usage: host PACK [LEVEL]
+ */
 #include "lp_game.h"
 #include "lp_pack.h"
 
