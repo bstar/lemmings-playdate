@@ -1,0 +1,5 @@
+# The owner-supplied reference set is tracked for reproducible preservation
+# builds, but must never travel in a public source archive. git archive reads
+# these attributes from the tree it exports, so this file has to be committed
+# at the release tag to take effect.
+reference/ export-ignore

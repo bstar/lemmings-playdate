@@ -1,0 +1,7 @@
+name=Lemmings
+author=Your Name
+description=Original DOS levels with Lynx-inspired controls
+bundleID=com.example.lemmings
+version=0.0.0
+buildNumber=0
+imagePath=SystemAssets

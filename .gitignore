@@ -1,0 +1,38 @@
+# Owner-supplied original game data, and material derived from it. None of it
+# is redistributable, so it stays out of the repository. Keep local copies
+# here; the build reads them from the working tree.
+reference/
+art/
+playdate/effects/*.wav
+playdate/Source/SystemAssets/
+
+# Store-page copy, artwork, and publishing tooling are specific to one
+# distribution channel and to one publisher, so they stay local.
+release/
+tools/package_itch_release.py
+
+# Copy playdate/Source/pdxinfo.example to playdate/Source/pdxinfo and set your
+# own identity. The real file carries a publisher and bundle ID, and the
+# release target advances its version.
+playdate/Source/pdxinfo
+
+build/
+playdate/build-host/
+generated/
+*.pdx/
+playdate/Source/pdex.bin
+playdate/Source/pdex.dylib
+playdate/Source/pdex.elf
+playdate/Source/pdex.so
+playdate/Source/assets/
+playdate/Source/audio/
+playdate/Source/effects/
+playdate/Source/fonts/
+playdate/Source/licenses/
+playdate/Source/music/
+playdate/Source/sfx/
+preservation/private/
+__pycache__/
+*.pyc
+.DS_Store
+playdate/Source/TEST_UNLOCK.txt
