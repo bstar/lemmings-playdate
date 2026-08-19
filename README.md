@@ -3,6 +3,8 @@
 A clean-room engine and asset converter that run the original DOS levels on the
 Playdate. This repository contains only the new implementation:
 
+![Animated preview of the Lemmings Playdate port](docs/assets/playdate-demo.gif)
+
 - `preservation/` records hashes, provenance, and reverse-engineering notes.
 - `tools/assetc/` converts the DOS data into a deterministic `LPD1` pack.
 - `playdate/` contains the portable C game core and Playdate adapter, plus the
@@ -148,6 +150,13 @@ and private decompiler output, none of which is redistributable.
 The portable core and converter are kept separate from that material so the
 provenance and licensing boundaries stay explicit, and so this repository can
 be published without any of it.
+
+## Engineering story
+
+Read [From DOS Binary to Playdate](https://bstar.github.io/lemmings-playdate/blog/decompiling-lemmings/),
+a beginner-friendly deep dive into the decompilation and reverse-engineering
+process, deterministic asset conversion, portable C engine, pixel-exact
+presentation, and real-time AdLib audio implementation.
 
 DBOPL is derived from DOSBox and licensed under GPL-2.0-or-later. A distributed
 binary using this backend must be accompanied by the corresponding source and

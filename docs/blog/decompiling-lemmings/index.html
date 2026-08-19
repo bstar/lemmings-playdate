@@ -1,0 +1,1029 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A beginner-friendly technical history of reverse engineering DOS Lemmings and building its faithful Playdate preservation port.">
+  <meta name="theme-color" content="#ffc833">
+  <meta property="og:title" content="From DOS Binary to Playdate">
+  <meta property="og:description" content="How reverse engineering, deterministic conversion, portable C, pixel-exact rendering, and real-time AdLib synthesis rebuilt Lemmings for Playdate.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://bstar.github.io/lemmings-playdate/blog/decompiling-lemmings/">
+  <title>From DOS Binary to Playdate — Lemmings Preservation Port</title>
+  <style>
+:root {
+  --yellow: #ffc833;
+  --yellow-soft: #fff1bd;
+  --ink: #171713;
+  --muted: #66655d;
+  --paper: #f7f5ee;
+  --paper-raised: #fffdf6;
+  --line: #d9d4c5;
+  --code: #20211f;
+  --green: #477b45;
+  --max: 800px;
+  color-scheme: light dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 2rem; }
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 82% 4%, rgba(255,200,51,.22), transparent 24rem),
+    linear-gradient(90deg, rgba(23,23,19,.025) 1px, transparent 1px),
+    var(--paper);
+  background-size: auto, 32px 32px, auto;
+  color: var(--ink);
+  font: 17px/1.72 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  text-rendering: optimizeLegibility;
+}
+a { color: inherit; text-decoration-color: var(--yellow); text-decoration-thickness: 3px; text-underline-offset: 3px; }
+a:hover { background: var(--yellow-soft); }
+.site-home { position: absolute; z-index: 2; top: 1.4rem; left: max(1.5rem, calc((100% - 1120px) / 2)); color: var(--yellow); font: 800 .68rem/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .1em; text-decoration: none; text-transform: uppercase; }
+.site-home:hover { color: #fffdf6; background: transparent; }
+.progress { position: fixed; z-index: 50; inset: 0 0 auto; height: 4px; background: transparent; }
+.progress span { display: block; width: 0; height: 100%; background: var(--yellow); }
+.hero {
+  display: grid;
+  align-items: end;
+  position: relative;
+  overflow: hidden;
+  color: #fffdf6;
+  background: var(--ink);
+  border-bottom: 12px solid var(--yellow);
+}
+.hero::after {
+  content: "10110100  1991 → 2026  01001100";
+  position: absolute; right: 3vw; bottom: 3rem;
+  color: rgba(255,255,255,.13);
+  writing-mode: vertical-rl;
+  font: 700 .68rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .25em;
+}
+.hero-inner { width: min(1120px, calc(100% - 3rem)); margin: 0 auto; padding: 5rem 0 4rem; position: relative; z-index: 1; }
+.eyebrow { display: inline-flex; align-items: center; gap: .65rem; color: var(--yellow); font: 800 .75rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .16em; text-transform: uppercase; }
+.eyebrow::before { content: ""; width: 2rem; height: 3px; background: currentColor; }
+h1 { max-width: 920px; margin: 1.2rem 0 .7rem; font-size: clamp(3.3rem, 9vw, 7.8rem); line-height: .88; letter-spacing: -.07em; font-weight: 900; }
+.hero-subtitle { max-width: 690px; margin: 1.8rem 0 3.5rem; color: #d7d3c8; font-size: clamp(1.15rem, 2.1vw, 1.45rem); line-height: 1.5; }
+.metrics { display: flex; flex-wrap: wrap; gap: 1px; max-width: 720px; background: #494940; border: 1px solid #494940; }
+.metric { min-width: 150px; flex: 1; padding: 1rem 1.2rem; background: #252621; }
+.metric strong { display: block; color: var(--yellow); font: 800 1.45rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.metric span { color: #aaa89e; font-size: .75rem; letter-spacing: .08em; text-transform: uppercase; }
+.article-demo { width: min(900px, calc(100% - 3rem)); margin: 3.5rem auto 0; overflow: hidden; border: 1px solid #494940; border-radius: 12px; background: #171713; box-shadow: 0 22px 55px rgba(23,23,19,.18); }
+.article-demo img { display: block; width: 100%; height: auto; image-rendering: pixelated; }
+.article-demo figcaption { padding: .8rem 1rem; color: #d7d3c8; background: #171713; font: 700 .66rem/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; text-transform: uppercase; }
+.layout { width: min(1200px, calc(100% - 3rem)); margin: 0 auto; display: grid; grid-template-columns: 240px minmax(0, var(--max)); gap: clamp(3rem, 7vw, 7rem); align-items: start; }
+.toc { position: sticky; top: 2rem; max-height: calc(100vh - 4rem); overflow: auto; padding: 5rem 0; font-size: .76rem; scrollbar-width: thin; }
+.toc-label { display: block; margin-bottom: 1.2rem; font: 900 .68rem/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+.toc a { display: block; padding: .34rem .7rem; border-left: 2px solid var(--line); color: var(--muted); text-decoration: none; line-height: 1.35; }
+.toc a:hover, .toc a.active { color: var(--ink); border-left-color: var(--yellow); background: linear-gradient(90deg, var(--yellow-soft), transparent); }
+main { min-width: 0; padding: 5rem 0 8rem; }
+.lead { font-size: 1.28rem; line-height: 1.62; color: #3f3e38; }
+.chapter { display: block; position: relative; padding-top: 1rem; }
+.chapter-number { float: left; margin: .45rem 1rem .2rem -3.5rem; color: var(--yellow); font: 900 1rem/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+h2 { margin: 3.5rem 0 1.5rem; font-size: clamp(2.1rem, 5vw, 3.25rem); line-height: 1.02; letter-spacing: -.045em; }
+h3 { margin: 2.6rem 0 .7rem; font-size: 1.35rem; line-height: 1.25; }
+h4 { margin: 2rem 0 .5rem; font-size: 1.05rem; }
+p { margin: 0 0 1.2rem; }
+strong { font-weight: 800; }
+code { padding: .12em .35em; border-radius: 4px; background: #e8e4d8; font: .87em/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.code-frame { margin: 1.5rem 0 2rem; border-radius: 10px; background: var(--code); box-shadow: 0 14px 35px rgba(23,23,19,.14); overflow: auto; }
+.code-frame::before { content: "SOURCE / COMMAND"; display: block; padding: .65rem 1rem; border-bottom: 1px solid #3e403a; color: #999b8d; font: 700 .6rem/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .16em; }
+.code-frame.diagram::before { content: "SYSTEM MAP"; }
+pre { margin: 0; padding: 1.2rem 1.35rem 1.4rem; overflow: auto; color: #f7f5ee; font: .83rem/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
+pre code { padding: 0; background: transparent; color: inherit; }
+blockquote { position: relative; margin: 2rem 0; padding: 1.5rem 1.7rem 1.4rem 2.2rem; background: var(--yellow); color: #171713; border-radius: 2px 12px 12px 2px; box-shadow: 8px 8px 0 #171713; }
+blockquote p { margin: 0; font-size: 1.12rem; font-weight: 700; line-height: 1.55; }
+.quote-mark { position: absolute; left: .45rem; top: .45rem; font: 900 2.4rem/1 Georgia, serif; opacity: .28; }
+ul, ol { margin: .5rem 0 1.6rem; padding-left: 1.35rem; }
+li { margin: .32rem 0; padding-left: .25rem; }
+li::marker { color: #b68000; font-weight: 900; }
+.table-wrap { margin: 1.6rem 0 2rem; overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--paper-raised); }
+table { width: 100%; border-collapse: collapse; font-size: .9rem; line-height: 1.45; }
+th { padding: .75rem 1rem; color: #171713; background: var(--yellow); text-align: left; font: 800 .72rem/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .06em; text-transform: uppercase; }
+td { padding: .78rem 1rem; border-top: 1px solid var(--line); vertical-align: top; }
+tr:hover td { background: var(--yellow-soft); }
+.section-rule { height: 2.4rem; display: flex; align-items: center; margin: .5rem 0; }
+.section-rule span { width: 3rem; height: 5px; background: var(--yellow); box-shadow: 9px 0 0 var(--ink); }
+.footer { color: #e3dfd3; background: var(--ink); border-top: 10px solid var(--yellow); }
+.footer-inner { width: min(800px, calc(100% - 3rem)); margin: 0 auto; padding: 4rem 0; }
+.footer strong { color: var(--yellow); }
+.back-top { display: inline-block; margin-top: 1rem; color: var(--yellow); font: 800 .72rem/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .1em; text-decoration: none; }
+@media (max-width: 900px) {
+  .layout { display: block; width: min(var(--max), calc(100% - 2.2rem)); }
+  .toc { position: relative; top: auto; max-height: none; padding: 2.5rem 0 0; columns: 2; column-gap: 1rem; }
+  .toc-label { column-span: all; }
+  .toc a { break-inside: avoid; }
+  main { padding-top: 2.5rem; }
+  .chapter-number { float: none; margin: 0 0 -.8rem; }
+}
+@media (max-width: 560px) {
+  body { font-size: 16px; }
+  .hero-inner { width: calc(100% - 2rem); padding-bottom: 3rem; }
+  h1 { font-size: clamp(3rem, 17vw, 5rem); }
+  .metrics { display: grid; grid-template-columns: 1fr 1fr; }
+  .metric { min-width: 0; }
+  .layout { width: calc(100% - 2rem); }
+  .toc { columns: 1; }
+  blockquote { margin-right: 8px; }
+}
+@media (prefers-color-scheme: dark) {
+  :root { --ink: #f5f2e9; --muted: #aaa89f; --paper: #171814; --paper-raised: #20211c; --line: #3e4038; --code: #090a08; --yellow-soft: #423817; }
+  body { background-color: var(--paper); }
+  .hero, .footer { --ink: #171713; color: #fffdf6; background-color: #0d0e0c; }
+  .lead { color: #d5d1c6; }
+  code { background: #303129; }
+  blockquote { color: #171713; box-shadow: 8px 8px 0 #f5f2e9; }
+  th { color: #171713; }
+  .section-rule span { box-shadow: 9px 0 0 #f5f2e9; }
+}
+@media print {
+  :root { color-scheme: light; --ink: #000; --paper: #fff; --paper-raised: #fff; --line: #aaa; }
+  body { background: #fff; font-size: 10.5pt; }
+  .progress, .toc, .hero::after { display: none; }
+  .hero { min-height: auto; color: #000; background: #fff; border-bottom: 4px solid #000; }
+  .hero-inner { width: 100%; padding: 2rem 0; }
+  .eyebrow, .metric strong { color: #000; }
+  h1 { font-size: 42pt; }
+  .hero-subtitle { color: #333; }
+  .metrics { background: #aaa; }
+  .metric { background: #fff; }
+  .layout, .footer-inner { display: block; width: 100%; }
+  main { padding: 1rem 0; }
+  .chapter { break-before: page; }
+  .chapter:first-of-type { break-before: auto; }
+  .code-frame, blockquote, .table-wrap { break-inside: avoid; box-shadow: none; }
+  .footer { color: #000; background: #fff; border-top: 4px solid #000; }
+}
+</style>
+</head>
+<body id="top">
+  <div class="progress" aria-hidden="true"><span></span></div>
+  <header class="hero">
+    <a class="site-home" href="../../">← Preservation notes</a>
+    <div class="hero-inner">
+      <div class="eyebrow">A preservation engineering field guide</div>
+      <h1>From DOS Binary<br>to Playdate</h1>
+      <p class="hero-subtitle">How reverse engineering, deterministic conversion, a clean C engine, pixel-exact rendering, and real-time AdLib synthesis rebuilt Lemmings for a modern one-bit handheld.</p>
+      <div class="metrics" aria-label="Project highlights">
+        <div class="metric"><strong>120</strong><span>Original levels</span></div>
+        <div class="metric"><strong>17 Hz</strong><span>Logic clock</span></div>
+        <div class="metric"><strong>2×</strong><span>Exact pixels</span></div>
+        <div class="metric"><strong>21</strong><span>AdLib tracks</span></div>
+      </div>
+    </div>
+  </header>
+  <figure class="article-demo">
+    <img src="../../assets/playdate-demo.gif" width="800" height="480" alt="Animated preview of the Lemmings Playdate title screen and presentation">
+    <figcaption>The finished port in motion — native Playdate presentation built on preserved DOS data and a clean portable engine.</figcaption>
+  </figure>
+  <div class="layout">
+    <nav class="toc" aria-label="Document sections">
+      <span class="toc-label">Inside this guide</span>
+      <a href="#1-the-basic-ideas">The basic ideas</a>
+<a href="#2-the-project-at-a-glance">The project at a glance</a>
+<a href="#3-establishing-a-trustworthy-reference">Establishing a trustworthy reference</a>
+<a href="#4-why-the-executable-had-to-be-unpacked-first">Why the executable had to be unpacked first</a>
+<a href="#5-producing-assembly-and-pseudocode">Producing assembly and pseudocode</a>
+<a href="#deep-dive-from-machine-code-bytes-to-portable-c">Deep dive: from machine-code bytes to portable C</a>
+<a href="#6-turning-decompiler-output-into-reliable-knowledge">Turning decompiler output into reliable knowledge</a>
+<a href="#7-decoding-the-dos-data-archives">Decoding the DOS data archives</a>
+<a href="#8-converting-data-instead-of-decoding-it-on-playdate">Converting data instead of decoding it on Playdate</a>
+<a href="#9-rebuilding-the-game-rules-in-portable-c">Rebuilding the game rules in portable C</a>
+<a href="#10-adapting-a-wide-color-game-to-a-small-one-bit-display">Adapting a wide color game to a small one-bit display</a>
+<a href="#11-recreating-adlib-music-instead-of-storing-recordings">Recreating AdLib music instead of storing recordings</a>
+<a href="#12-why-device-audio-was-harder-than-simulator-audio">Why device audio was harder than Simulator audio</a>
+<a href="#13-saving-progress-and-presenting-a-complete-game">Saving progress and presenting a complete game</a>
+<a href="#14-testing-the-preservation-claims">Testing the preservation claims</a>
+<a href="#15-iteration-was-part-of-the-reverse-engineering">Iteration was part of the reverse engineering</a>
+<a href="#16-why-the-result-is-so-faithful">Why the result is so faithful</a>
+<a href="#17-reproducing-the-research-and-build-workflow">Reproducing the research and build workflow</a>
+<a href="#18-common-problems-and-what-they-teach">Common problems and what they teach</a>
+<a href="#19-preservation-and-licensing-boundaries">Preservation and licensing boundaries</a>
+<a href="#20-lessons-for-another-preservation-port">Lessons for another preservation port</a>
+<a href="#conclusion">Conclusion</a>
+<a href="#repository-reference-map">Repository reference map</a>
+    </nav>
+    <main><p class="lead">This document explains how a 1991 DOS game was studied and rebuilt as a highly faithful game for the Playdate handheld. It is written for readers who may be new to programming, reverse engineering, emulation, or game preservation.</p>
+<p>The most important fact to understand is this:</p>
+<blockquote><span class="quote-mark">“</span><p>The Playdate game is not the original DOS program running inside an emulator, and it is not decompiled DOS code compiled for a new machine. It is a new, portable game engine written in C, guided by evidence from the original executable and driven by data converted from an owner-supplied copy of the DOS game.</p></blockquote>
+<p>That distinction explains both the technical approach and the quality of the result. The project preserved the parts that needed to remain exact—levels, masks, sprites, animation data, music commands, timing relationships, and many gameplay constants—while rewriting the platform-specific machinery for a modern one-bit handheld.</p>
+<p>The finished port includes all 120 one-player levels in Fun, Tricky, Taxing, and Mayhem order; the complete skill set; mutable terrain; traps; progression and saved games; native Playdate menus and controls; exact 2× gameplay presentation; real-time AdLib synthesis; sound effects; and device-specific audio and storage optimizations.</p>
+<div class="section-rule" aria-hidden="true"><span></span></div>
+<section class="chapter" id="1-the-basic-ideas"><div class="chapter-number">1</div>
+<h2>1. The basic ideas</h2>
+<p>Before following the project, it helps to define a few terms.</p>
+<h3 id="source-code">Source code</h3>
+<p>Source code is the human-readable program written by a developer. C source might contain a line such as:</p>
+<div class="code-frame"><pre><code class="language-c">lemming-&gt;state = LP_STATE_FALL;</code></pre></div>
+<p>A compiler translates source code into machine code: numeric instructions that a processor can execute.</p>
+<h3 id="machine-code-and-executables">Machine code and executables</h3>
+<p>Machine code is designed for a particular processor. The DOS version of Lemmings contains 16-bit Intel x86 machine code. Playdate uses a very different ARM processor. The DOS instructions therefore cannot simply be copied into a Playdate application.</p>
+<p>An executable is a file containing machine code plus information needed to load and run it. The DOS VGA program used here is an MZ executable, a common DOS executable format.</p>
+<h3 id="assembly-and-disassembly">Assembly and disassembly</h3>
+<p>Assembly language is a readable notation for machine instructions. A disassembler turns machine-code bytes into assembly instructions. It can show that a value is loaded, compared, or written, but it usually cannot recover the original variable names, comments, file organization, or programmer intent.</p>
+<h3 id="decompilation">Decompilation</h3>
+<p>A decompiler tries to turn machine instructions into higher-level pseudocode resembling C. This can make control flow easier to understand, but the result is an interpretation—not the original source code.</p>
+<p>Compilation throws information away. A function once named <code>UpdateFallingLemming</code> may appear as <code>FUN_1234</code>. A meaningful structure may look like unrelated array offsets. Several original statements may become one instruction sequence, or one source operation may expand into many instructions.</p>
+<p>This is why decompilation is the start of an investigation, not a button that restores a project.</p>
+<h3 id="reverse-engineering">Reverse engineering</h3>
+<p>Reverse engineering is the larger process of learning how a system works from its observable artifacts. It may use:</p>
+<ul>
+<li>File-format inspection</li>
+<li>Disassembly and decompilation</li>
+<li>Controlled experiments in the original game</li>
+<li>Comparisons between versions</li>
+<li>Memory and register traces</li>
+<li>Timing measurements</li>
+<li>Tests of competing explanations</li>
+</ul>
+<h3 id="a-port">A port</h3>
+<p>A port adapts software to another platform. A faithful port preserves the important behavior and content while replacing assumptions that only made sense on the original machine.</p>
+<h3 id="emulation">Emulation</h3>
+<p>An emulator imitates another machine. For example, DOSBox emulates enough of a DOS-era PC to run the original executable. This project does not emulate a complete PC. It does, however, use a focused OPL2 emulator to recreate the AdLib sound chip. That is a small, deliberate form of component emulation inside an otherwise native port.</p>
+<h3 id="a-clean-implementation">A clean implementation</h3>
+<p>The new engine was written as modern, portable C. The original executable was treated as private behavioral evidence rather than copied, translated, or linked into the port. Decompiled output stayed in a private workspace. Public code expresses independently written rules and interfaces.</p>
+<p>This is sometimes described as a clean-room-style boundary. The important practical rule was simple: record facts about behavior and formats, then implement those facts cleanly in the new engine.</p>
+<div class="section-rule" aria-hidden="true"><span></span></div>
+</section>
+<section class="chapter" id="2-the-project-at-a-glance"><div class="chapter-number">2</div>
+<h2>2. The project at a glance</h2>
+<p>The workflow has four main layers:</p>
+<div class="code-frame diagram"><pre><code class="language-text">Owner-supplied DOS files
+          |
+          +--&gt; checksums and preservation notes
+          |
+          +--&gt; executable unpacking, disassembly, and private Ghidra analysis
+          |                         |
+          |                         +--&gt; behavioral facts
+          |
+          +--&gt; deterministic asset converter --&gt; lemmings.lpd
+                                                   |
+New portable C engine + Playdate adapter ----------+--&gt; Lemmings.pdx
+                                                   |
+ADLIB.DAT command image + DBOPL -------------------+--&gt; real-time music</code></pre></div>
+<p>The repository organizes those responsibilities deliberately:</p>
+<div class="table-wrap"><table><thead><tr><th>Area</th><th>Purpose</th></tr></thead><tbody><tr><td><code>preservation/</code></td><td>Reference hashes, reproducible decompilation setup, and reverse-engineering notes</td></tr><tr><td><code>tools/assetc/</code></td><td>DOS level and graphics decoding, conversion, compression, and pack validation</td></tr><tr><td><code>tools/audio/</code></td><td>Independent AdLib research interpreters, traces, and reference rendering</td></tr><tr><td><code>playdate/core/</code></td><td>Platform-independent game, pack, progress, music, and AdLib runtime code</td></tr><tr><td><code>playdate/src/main.c</code></td><td>Playdate input, menus, drawing, saves, sound effects, and application lifecycle</td></tr><tr><td><code>playdate/tests/</code></td><td>Native tests for game behavior, progression, and audio</td></tr></tbody></table></div>
+<p>This separation was one of the largest contributors to quality. A display bug could be fixed without changing physics. An audio optimization could be tested without touching level parsing. The converter could prove that data was decoded correctly before the handheld ever loaded it.</p>
+<div class="section-rule" aria-hidden="true"><span></span></div>
+</section>
+<section class="chapter" id="3-establishing-a-trustworthy-reference"><div class="chapter-number">3</div>
+<h2>3. Establishing a trustworthy reference</h2>
+<p>Reverse engineering is unreliable if the source material can silently change.</p>
+<p>Old games often exist in many forms: original disks, regional variants, later releases, cracked copies, repacks, and archives with altered documentation. Two files with the same name can contain different bytes and therefore different code or data.</p>
+<p>The project addressed this with SHA-256 hashes. A hash is like a highly sensitive digital fingerprint. Passing a file through SHA-256 produces a long value. Changing even one byte produces a different value with overwhelming probability.</p>
+<p>The file <code>preservation/reference.sha256</code> records the expected hashes of 71 preservation inputs. The verifier in <code>preservation/verify_reference.py</code> checks three things:</p>
+<ol>
+<li>Every expected file exists.</li>
+<li>No unexpected file has appeared in the reference set.</li>
+<li>Every file produces its recorded hash.</li>
+</ol>
+<p>This creates an immutable baseline. When a test says that a table occurs at a particular offset, we know exactly which binary that offset refers to.</p>
+<p>The reference inventory established several early facts:</p>
+<ul>
+<li>The VGA game program is a PKLITE-compressed, 16-bit DOS MZ executable.</li>
+<li>Gameplay levels are 1,600 by 160 source pixels.</li>
+<li>The original gameplay viewport is 320 by 160 pixels, with a 320 by 40 control panel.</li>
+<li>Level storage contains 80 unique layouts plus 80 variation records, assembled into 120 one-player levels.</li>
+<li>Graphics include five normal terrain/object sets and four 960 by 160 special backgrounds.</li>
+<li>Decompressed AdLib data forms a 22,125-byte Sound Images memory image with 21 music tracks.</li>
+<li>A 256 KiB, headerless Atari Lynx cartridge image was available as a secondary control reference, especially useful when considering handheld interaction and action-panel presentation.</li>
+</ul>
+<p>The original files were never edited in place. Generated files went into ignored working directories. This protected both reproducibility and the legal boundary between new code and owner-supplied material.</p>
+<div class="section-rule" aria-hidden="true"><span></span></div>
+</section>
+<section class="chapter" id="4-why-the-executable-had-to-be-unpacked-first"><div class="chapter-number">4</div>
+<h2>4. Why the executable had to be unpacked first</h2>
+<p>The VGA executable was compressed with PKLITE. Executable compressors reduce disk size by storing a small unpacking routine followed by compressed program data. When launched under DOS, the stub reconstructs the real program in memory and transfers control to it.</p>
+<p>If a decompiler analyzes the packed file directly, it mostly sees the unpacker—not the game.</p>
+<p>The project automated unpacking in <code>preservation/prepare_decomp.py</code>:</p>
+<ol>
+<li>Read the DOS executable header.</li>
+<li>Extract the header size in 16-byte paragraphs.</li>
+<li>Locate PKLITE decoder metadata.</li>
+<li>Calculate where the compressed payload begins.</li>
+<li>Clone the open-source <code>depklite</code> utility at a pinned Git commit.</li>
+<li>Compile that known revision locally.</li>
+<li>Decrypt and unpack the payload into a raw binary image.</li>
+<li>Reject the output unless its size is exactly 82,906 bytes.</li>
+</ol>
+<p>Pinning the <code>depklite</code> revision matters. If a tool changes later, the project should not unknowingly generate different analysis input.</p>
+<p>The expected-size check is also important. A program that merely exits without an error has not necessarily done the right thing. In preservation work, successful output should have properties that can be verified.</p>
+<div class="section-rule" aria-hidden="true"><span></span></div>
+</section>
+<section class="chapter" id="5-producing-assembly-and-pseudocode"><div class="chapter-number">5</div>
+<h2>5. Producing assembly and pseudocode</h2>
+<p>The unpacked image was analyzed in two complementary ways.</p>
+<h3 id="a-flat-disassembly">A flat disassembly</h3>
+<p><code>ndisasm -b 16</code> produced a text listing of 16-bit x86 instructions. A flat disassembler is simple and predictable. It does not try to infer elaborate types or program structure, which makes it useful when checking exact offsets and instruction bytes.</p>
+<h3 id="a-ghidra-project">A Ghidra project</h3>
+<p>Ghidra was run headlessly using the processor definition <code>x86:LE:16:Real Mode</code>:</p>
+<ul>
+<li><code>x86</code> selects the processor family.</li>
+<li><code>LE</code> means little-endian byte order.</li>
+<li><code>16</code> selects 16-bit instructions.</li>
+<li><code>Real Mode</code> matches the memory model used by DOS programs before protected-mode operating systems became common.</li>
+</ul>
+<p>The unpacked file is raw program data, so it no longer has a normal executable header telling Ghidra where execution begins. <code>SeedEntry.java</code> solves this by disassembling address <code>0000:0000</code>, creating an <code>entry</code> function, and marking it as an external entry point.</p>
+<p><code>ExportFunctions.java</code> then visits every function Ghidra discovers and asks its decompiler for C-like pseudocode. The exported pseudocode is useful for searching and annotation, but remains private.</p>
+<p>That privacy boundary is intentional. The public engine contains newly expressed game rules, not pasted decompiler output.</p>
+<h3 id="what-the-tools-could-and-could-not-tell-us">What the tools could and could not tell us</h3>
+<p>The tools could reveal:</p>
+<ul>
+<li>Branches, loops, calls, and arithmetic</li>
+<li>Reads and writes at fixed offsets</li>
+<li>Tables indexed by level, object, or channel numbers</li>
+<li>Relationships between timers and state changes</li>
+<li>Calls into DOS or sound-driver interfaces</li>
+</ul>
+<p>They could not automatically reveal:</p>
+<ul>
+<li>Original function and variable names</li>
+<li>Original comments</li>
+<li>Original source files</li>
+<li>Whether a strange operation was intentional, an optimization, or compiler output</li>
+<li>The complete meaning of every field</li>
+<li>The original programming language with certainty</li>
+</ul>
+<p>The executable proves that the shipped program consists of 16-bit x86 machine code. It may contain patterns consistent with assembly or compiled higher-level code, but a stripped binary alone is not enough to responsibly claim an exact original source language.</p>
+<div class="section-rule" aria-hidden="true"><span></span></div>
+</section>
+<section class="chapter" id="deep-dive-from-machine-code-bytes-to-portable-c"><div class="chapter-number">→ C</div>
+<h2>Deep dive: from machine-code bytes to readable portable C</h2>
+<p>This is the step most often compressed into the phrase “we decompiled the game.” In reality, it is a chain of different transformations, and only the first few can be automated. The final portable C was not emitted by Ghidra and cleaned up until it compiled. It was written independently after the machine code had been turned into evidence about data formats and behavior.</p>
+<blockquote><span class="quote-mark">“</span><p>The DOS executable contains native machine code, not bytecode. A disassembler decodes those bytes into x86 instructions; a decompiler lifts the instructions into approximate pseudocode; a human then extracts a behavioral specification; and the new engine expresses that specification as portable C.</p></blockquote>
+<h3 id="machine-code-is-not-bytecode">Machine code is not bytecode</h3>
+<p>People often use “bytecode” to mean any program represented as bytes. In software engineering, it normally has a narrower meaning: instructions for a virtual machine, such as Java bytecode or Microsoft’s Common Intermediate Language. Another program interprets or compiles that intermediate language.</p>
+<p>DOS Lemmings is different. Its executable contains instructions intended to run directly on an Intel-compatible processor in 16-bit real mode. Those instructions are <strong>machine code</strong>. They are still stored as bytes, but the processor itself assigns meaning to them.</p>
+<p>A short, invented x86 example—not bytes copied from Lemmings—looks like this:</p>
+<div class="code-frame"><pre><code class="language-text">Bytes             Disassembled instruction       Plain-language effect
+B8 03 00          MOV AX, 0003h                  Put the number 3 in register AX
+83 C0 02          ADD AX, 0002h                  Add 2 to AX
+3D 05 00          CMP AX, 0005h                  Compare AX with 5
+75 04             JNE somewhere_else            Jump if the values differ</code></pre></div>
+<p>The bytes do not contain the English descriptions, variable names, or a statement such as <code>if (value != 5)</code>. Those are interpretations layered on top.</p>
+<h3 id="how-x86-instructions-are-decoded">How x86 instructions are decoded</h3>
+<p>The x86 instruction set is variable-length. One instruction may occupy one byte while another occupies several. A decoder starts at a known address and reads:</p>
+<ol>
+<li>Optional prefix bytes that change operand size, segment selection, or repetition behavior.</li>
+<li>An opcode identifying the broad operation.</li>
+<li>Sometimes a ModR/M byte describing registers and memory addressing.</li>
+<li>Sometimes a displacement used in an address.</li>
+<li>Sometimes an immediate value stored directly in the instruction.</li>
+</ol>
+<p>Multi-byte numbers are little-endian, meaning the least significant byte appears first in the file. The two bytes <code>34 12</code> therefore represent the 16-bit value <code>0x1234</code>.</p>
+<p>Correctly finding the first instruction is essential. Starting one byte late can produce a completely different sequence of apparently valid instructions. Because x86 encoding is dense, random data can also look like code. This is why the project seeded the known entry point and also retained a flat <code>ndisasm</code> listing for exact offset checks.</p>
+<h3 id="the-code-versus-data-problem">The code-versus-data problem</h3>
+<p>An executable is not one uninterrupted stream of instructions. It also contains constants, lookup tables, text, masks, addresses, and padding. The bytes themselves do not carry universal labels saying “code starts here” or “this is a 17-entry music table.”</p>
+<p>Analysis begins at an entry point and follows direct evidence:</p>
+<ul>
+<li>A <code>CALL</code> suggests another function entry.</li>
+<li>A conditional or unconditional jump creates another possible execution path.</li>
+<li>A return ends one path.</li>
+<li>A memory read may point to data.</li>
+<li>An indirect call or jump may require manual investigation because its destination is computed at runtime.</li>
+</ul>
+<p>This process is called recursive traversal. A linear sweep, by contrast, tries to decode everything in order. Each catches things the other can miss. Ghidra combines automated analysis with information supplied by the researcher.</p>
+<p>Tables are especially important in games. If code loads a level number, constrains it to a range, and uses it to index a nearby sequence of bytes, those bytes may be a selection table. The meaning comes from the access pattern, values, surrounding comparisons, and observed behavior—not from the bytes alone.</p>
+<h3 id="real-mode-segments-and-pointers">Real-mode segments and pointers</h3>
+<p>A modern flat address such as <code>0x12345678</code> can often be treated as one location in one large address space. A 16-bit DOS program commonly uses a segment and an offset. In real mode, the physical address is approximately:</p>
+<div class="code-frame diagram"><pre><code class="language-text">physical address = segment × 16 + offset
+
+1234:0050  →  0x12340 + 0x0050  →  0x12390</code></pre></div>
+<p>Different segment:offset pairs can name the same physical byte. Code, data, and stack segments may also be changed independently. A decompiler has to track these assumptions, and the researcher must distinguish a near pointer from a far pointer when the evidence requires it.</p>
+<p>The unpacked PKLITE result is a raw image without the original loader metadata Ghidra would normally consume from an MZ file. The project therefore selected the real-mode processor explicitly and seeded address <code>0000:0000</code>. Addresses recorded in preservation notes are offsets in that pinned raw image, which avoids pretending they are universal addresses for every release.</p>
+<h3 id="recovering-functions-and-local-values">Recovering functions and local values</h3>
+<p>At machine level, a function is a convention rather than a richly described object. A <code>CALL</code> places a return address somewhere, a routine manipulates registers and memory, and a <code>RET</code> returns. The binary may not state how many arguments exist or what type each one has.</p>
+<p>Older x86 compilers often build a stack frame using the <code>BP</code> register. Positive offsets from <code>BP</code> may be arguments and negative offsets may be local storage. But optimized code can omit the conventional frame, reuse registers, merge variables, or keep values in global memory.</p>
+<p>Ghidra performs several reasoning steps:</p>
+<ol>
+<li>Group instructions into <strong>basic blocks</strong>: straight-line sequences with one entry and one exit.</li>
+<li>Connect blocks into a <strong>control-flow graph</strong> showing possible branches and loops.</li>
+<li>Lift processor instructions into an internal, processor-neutral representation called p-code.</li>
+<li>Track where values are defined and later used.</li>
+<li>Infer parameters, local variables, return values, and likely types.</li>
+<li>Simplify the result into C-like expressions, loops, and conditionals.</li>
+</ol>
+<p>A control-flow graph is the hidden structure behind readable pseudocode:</p>
+<div class="code-frame diagram"><pre><code class="language-text">             [read current state]
+                       |
+             [state == falling?]
+                 /           \
+              yes             no
+               |               |
+       [run fall behavior]  [check other states]
+                 \           /
+                  [advance frame]</code></pre></div>
+<p>Even after this analysis, names might remain <code>FUN_1042</code>, <code>param_1</code>, or <code>DAT_7a20</code>. Types may be wrong. A word interpreted as an unsigned integer might really be a signed coordinate, bit flags, a timer, or an offset.</p>
+<h3 id="how-meaning-is-recovered">How meaning is recovered</h3>
+<p>Readable analysis grows through annotation. The researcher follows cross-references, compares tables with known file records, watches how values change, and renames things only when evidence supports the name.</p>
+<p>A typical investigation might proceed like this:</p>
+<ol>
+<li>Find code that reads a known level field or updates a visible counter.</li>
+<li>Follow callers and callees to identify the larger update phase.</li>
+<li>Record which offsets are read and written.</li>
+<li>Compare those accesses with controlled behavior in the original game.</li>
+<li>Try an interpretation such as “this byte is the falling-state timer.”</li>
+<li>Check whether every use of the byte is consistent with that interpretation.</li>
+<li>Record the conclusion, location, method, and confidence.</li>
+</ol>
+<p>Dynamic observation can strengthen static analysis. For example, a table that looks like song indices becomes much more convincing when its values match music heard across normal levels, its length matches the wrap comparison, and a neighboring table matches the four special levels.</p>
+<h3 id="why-decompiled-pseudocode-is-not-portable-c">Why decompiled pseudocode is not portable C</h3>
+<p>C-like pseudocode may look compilable while still encoding assumptions that only hold in the original process. Common hazards include:</p>
+<div class="table-wrap"><table><thead><tr><th>Recovered pattern</th><th>Why copying it is risky</th><th>Portable treatment</th></tr></thead><tbody>
+<tr><td>Raw numeric addresses</td><td>They refer to one loaded DOS memory image.</td><td>Use named arrays, structures, indexes, and validated readers.</td></tr>
+<tr><td>Segmented pointers</td><td>Playdate uses a flat ARM address space.</td><td>Convert source offsets explicitly while parsing; use normal pointers only inside owned buffers.</td></tr>
+<tr><td>Unaligned word reads</td><td>x86 permits accesses that another CPU may reject or handle differently.</td><td>Read bytes and assemble little-endian integers with helper functions.</td></tr>
+<tr><td>Implicit 16-bit overflow</td><td>A modern C <code>int</code> is normally wider, and signed overflow is not portable.</td><td>Use <code>uint8_t</code>, <code>uint16_t</code>, <code>int16_t</code>, or wider deliberate arithmetic.</td></tr>
+<tr><td>Register reuse</td><td>One register may represent several unrelated source variables over time.</td><td>Create separate, meaningfully named C values.</td></tr>
+<tr><td>Magic offsets</td><td>The number describes a layout, not intent.</td><td>Give it a field name or isolate it in a format decoder.</td></tr>
+<tr><td>DOS interrupts and hardware writes</td><td>Those services do not exist on Playdate.</td><td>Replace them with a narrow platform interface or semantic event.</td></tr>
+<tr><td>Busy waits or hardware timing</td><td>CPU speed and scheduling are completely different.</td><td>Advance a fixed 17 Hz simulation from elapsed time.</td></tr>
+</tbody></table></div>
+<p>There is another subtle risk: a mechanically translated operation can preserve an implementation accident while losing the rule it once supported. The three-pixel falling counter seed is a concrete example. It belonged with a three-pixel movement step. Retaining the seed after changing movement speed made the port less faithful.</p>
+<h3 id="the-specification-bridge">The specification bridge</h3>
+<p>The project therefore inserted a conceptual bridge between decompilation and implementation:</p>
+<div class="code-frame diagram"><pre><code class="language-text">PRIVATE EVIDENCE                         PUBLIC IMPLEMENTATION
+----------------                         ---------------------
+x86 instructions                         named C functions
+Ghidra pseudocode        facts           explicit structs and enums
+raw offsets             ------->         fixed-width integer types
+tables and traces                         validated data readers
+observed DOS behavior                     deterministic tests
+
+                 No original routine is linked or executed.</code></pre></div>
+<p>The “facts” in the middle are statements such as:</p>
+<ul>
+<li>The simulation advances at 17 ticks per second.</li>
+<li>This field is a signed source-pixel coordinate.</li>
+<li>This mask removes these terrain pixels during a mining frame.</li>
+<li>The normal music selector wraps after 17 entries.</li>
+<li>A bomber counts down for five simulation seconds.</li>
+<li>Nuke arms one lemming slot per tick.</li>
+</ul>
+<p>These statements are much easier to review and test than a large body of anonymous pseudocode.</p>
+<h3 id="designing-the-new-c-model">Designing the new C model</h3>
+<p>The portable engine turns recovered concepts into explicit types. A lemming has a position, direction, state, animation frame, permanent abilities, countdown, and fall distance. A level has authored metadata, objects, collision, steel, and mutable visual planes. Skills and states are enums rather than unexplained numeric values.</p>
+<p>The resulting API uses verbs that describe game operations:</p>
+<div class="code-frame"><pre><code class="language-c">void lp_game_init(LPGame* game, LPLevelAssets* level);
+void lp_game_tick(LPGame* game);
+int  lp_game_can_assign(const LPGame* game, unsigned index, LPSkill skill);
+int  lp_game_assign(LPGame* game, unsigned index, LPSkill skill);
+void lp_game_nuke(LPGame* game);</code></pre></div>
+<p>These declarations are from the new engine’s public interface. They are not claimed as recovered original function names.</p>
+<p>Several design choices make this C portable:</p>
+<ul>
+<li><strong>Fixed-width integers</strong> state exactly how much data a field holds.</li>
+<li><strong>Explicit endian readers</strong> decode DOS values without depending on the host processor.</li>
+<li><strong>Bounded arrays</strong> make limits such as 100 lemmings and 32 objects visible.</li>
+<li><strong>No platform calls in the game core</strong> allows the same simulation to run in tests, a desktop host, Simulator, and ARM device builds.</li>
+<li><strong>Semantic sound events</strong> let gameplay request “splat” or “exit” without depending on Playdate’s audio API.</li>
+<li><strong>Source-pixel coordinates and fixed ticks</strong> keep rules stable when display or frame timing changes.</li>
+<li><strong>Versioned pack readers</strong> isolate old binary layouts from runtime structures.</li>
+</ul>
+<h3 id="what-was-translated-and-what-was-redesigned">What was translated and what was redesigned</h3>
+<p>Not every part of the project took the same route:</p>
+<div class="table-wrap"><table><thead><tr><th>Material</th><th>Technique</th><th>Reason</th></tr></thead><tbody>
+<tr><td>Levels, objects, palettes, sprite frames, and masks</td><td>Decode and deterministically convert original data.</td><td>The authored bytes are the best source of visual and level fidelity.</td></tr>
+<tr><td>Gameplay behavior</td><td>Infer rules, then independently implement a C state machine.</td><td>DOS machine code cannot run natively on ARM, and clean rules are testable.</td></tr>
+<tr><td>Music commands</td><td>Implement the Sound Images interpreter and feed its register writes to DBOPL.</td><td>This preserves original musical control flow without emulating an entire PC.</td></tr>
+<tr><td>DOS display and input code</td><td>Replace with a Playdate adapter.</td><td>VGA, mouse, keyboard, D-pad, crank, and a one-bit LCD have different interfaces.</td></tr>
+<tr><td>Menus and level browser</td><td>Redesign natively while preserving content and progression.</td><td>The high-resolution Playdate screen and system menu can provide better handheld usability.</td></tr>
+<tr><td>Timing-sensitive behavior</td><td>Preserve logical rates and relationships, then validate on real hardware.</td><td>Wall-clock loops and CPU-speed assumptions would not transfer safely.</td></tr>
+</tbody></table></div>
+<h3 id="proving-the-c-means-the-same-thing">Proving that the C means the same thing</h3>
+<p>Readable names do not prove correctness. Each recovered rule needs an observable consequence.</p>
+<p>The project used multiple levels of equivalence:</p>
+<ol>
+<li><strong>Structural equivalence:</strong> decoded sections, record counts, frame dimensions, and table hashes match known facts.</li>
+<li><strong>Behavioral equivalence:</strong> skills, release timing, fatal falls, traps, exits, and nuke transitions produce the expected state changes.</li>
+<li><strong>Trace equivalence:</strong> independently written audio interpreters emit identical register records for the same command stream.</li>
+<li><strong>Output equivalence:</strong> selected synthesized PCM output matches a pinned golden hash.</li>
+<li><strong>Experiential comparison:</strong> actual levels are played in Simulator and on hardware to find camera, cadence, selection, readability, and audio-budget problems.</li>
+</ol>
+<p>The last step feeds the first four. When playtesting finds a mismatch, the project returns to the evidence, identifies the missing rule, and adds a regression test. That is how anonymous machine instructions ultimately became readable, maintainable C without pretending the decompiler had reconstructed the original source.</p>
+<div class="section-rule" aria-hidden="true"><span></span></div>
+</section>
+<section class="chapter" id="6-turning-decompiler-output-into-reliable-knowledge"><div class="chapter-number">6</div>
+<h2>6. Turning decompiler output into reliable knowledge</h2>
+<p>The project used an evidence-driven loop:</p>
+<div class="code-frame diagram"><pre><code class="language-text">Observe something
+      |
+Form a precise hypothesis
+      |
+Find supporting data or executable behavior
+      |
+Implement the smallest clean rule
+      |
+Write a test that would fail if the rule regressed
+      |
+Compare again with the original and with real gameplay</code></pre></div>
+<p>This is much safer than treating decompiler pseudocode as authoritative source code.</p>
+<p>For each important finding, useful notes identify the exact reference hash, offset, observation method, and confidence. An address without a pinned binary is ambiguous; a guess without a test is fragile.</p>
+<h3 id="example-the-music-rotation">Example: the music rotation</h3>
+<p>The level files do not simply contain a song number for every normal level. Analysis of the unpacked VGA executable found a 17-byte selection table at offset <code>0x4877</code>, indexed by code near <code>0x4858</code>. A comparison at <code>0x484C</code> wraps the sequence after 17 entries.</p>
+<p>After converting the original one-based driver indices to zero-based pack indices, the normal sequence is:</p>
+<div class="code-frame"><pre><code class="language-text">Lemming 1, Lemming 2, Lemming 3, Mountain, Ten Lemmings, Can-Can,
+Tim 1, Tim 2, Tim 3, Tim 4, Doggie, Tim 5, Tim 6, Tim 7,
+Tim 8, Tim 9, Tim 10</code></pre></div>
+<p>A neighboring table at <code>0x4888</code> selects one of four special tracks for levels using special graphics: Awesome, Menace, Beast II, and Beast I.</p>
+<p>This explains why a plausible “track per level” implementation could sound good yet route the wrong music. The port maps the original success-order rotation onto canonical level order so choosing levels directly remains deterministic while preserving the intended sequence and special overrides.</p>
+<h3 id="example-falling-distance">Example: falling distance</h3>
+<p>At one point, a miner who cut through terrain could fall down a shaft and die even though later lemmings survived the same fall.</p>
+<p>The cause was not the level. The action-to-fall transition initialized the first lemming’s fall counter with three pixels that it had not actually travelled. That behavior could work when paired with the DOS game’s three-pixel first falling step, but the Playdate port had tuned falling to a smaller step. The counter and physical position no longer agreed.</p>
+<p>The fix was conceptual: fall distance must count actual source pixels travelled, including the landing step. A new fall begins at zero. Tests now pin both sides of the boundary: a 62-pixel drop survives and a 63-pixel drop splats.</p>
+<p>This is a good example of faithful porting. Copying a number without preserving the context around it was less accurate than preserving the underlying rule.</p>
+<h3 id="example-the-first-release">Example: the first release</h3>
+<p>The first lemming initially waited according to the level’s release rate. On very slow levels this produced a delay of more than six seconds. Investigation showed that entrance setup and the interval between later lemmings are separate concepts.</p>
+<p>The engine now uses a fixed two-second first-release delay. Later release intervals still follow the level’s authored release rate. The clock remains at its initial value during “Let’s Go!” and the hatch opening, then starts with the first falling lemming and music.</p>
+<h3 id="example-exact-explosions">Example: exact explosions</h3>
+<p>Bombing is not represented by one generic circle. The original executable contains 51 frames of 80 signed particle positions. The converter extracts that table from the unpacked executable and verifies it against an expected SHA-256 hash. The runtime combines it with the original terrain-removal mask, five-second countdown, “Oh no” transition, burst frame, sound event, and delayed removal.</p>
+<div class="section-rule" aria-hidden="true"><span></span></div>
+</section>
+<section class="chapter" id="7-decoding-the-dos-data-archives"><div class="chapter-number">7</div>
+<h2>7. Decoding the DOS data archives</h2>
+<p>Much of Lemmings is data-driven. Levels, terrain, objects, palettes, sprites, masks, and music commands live in DAT files rather than being drawn or authored again for this port.</p>
+<h3 id="the-backwards-lz-container">The backwards LZ container</h3>
+<p>The DOS DAT files use a compressed section format decoded by <code>tools/assetc/crunch.py</code>. It is a backwards LZ-style scheme.</p>
+<p>LZ compression saves space by replacing repeated data with references to bytes already decoded. “Backwards” here means that the bitstream and output are processed in a direction that differs from the straightforward left-to-right examples commonly shown in tutorials.</p>
+<p>The decoder does more than produce bytes. It checks:</p>
+<ul>
+<li>Section checksums</li>
+<li>Declared compressed and decompressed sizes</li>
+<li>Bitstream exhaustion</li>
+<li>Back-reference validity</li>
+<li>Exact output length</li>
+</ul>
+<p>Malformed data raises a format error instead of being accepted silently. Defensive parsing matters because one incorrect byte can shift every later field and create errors that look like gameplay bugs.</p>
+<h3 id="level-records">Level records</h3>
+<p><code>tools/assetc/levels.py</code> parses each binary level record into named concepts:</p>
+<ul>
+<li>Release rate</li>
+<li>Number of lemmings</li>
+<li>Rescue requirement</li>
+<li>Time limit</li>
+<li>Counts for all eight skills</li>
+<li>Starting camera position</li>
+<li>Normal graphics set or special graphics ID</li>
+<li>Object placements</li>
+<li>Terrain-piece placements</li>
+<li>Steel regions</li>
+<li>Level name</li>
+</ul>
+<p>The game stores 80 unique level layouts. <code>ODDTABLE.DAT</code> supplies 80 variation records that reuse layouts with changed parameters. The converter joins these into the canonical 120-level sequence and checks expected names. This prevents a technically valid but incorrectly ordered pack.</p>
+<h3 id="vga-planar-graphics">VGA planar graphics</h3>
+<p>Modern images often store complete RGB color values one pixel after another. DOS VGA assets commonly use indexed color and planar storage.</p>
+<p>An indexed pixel stores a small number that points into a palette. The palette supplies the red, green, and blue values. Planar storage separates bits of those indices into different bit planes. Recovering an image therefore requires combining corresponding bits from several areas.</p>
+<p>The converter reconstructs:</p>
+<ul>
+<li>Five standard terrain and object styles: dirt, fire, marble, pillar, and crystal</li>
+<li>Four special background maps</li>
+<li>Lemming animation frames</li>
+<li>Object animation frames</li>
+<li>Transparency masks</li>
+<li>Palettes</li>
+<li>Terrain-edit masks used by destructive skills</li>
+</ul>
+<p>Masks deserve special attention. A transparency mask says which pixels belong to a sprite. A terrain-edit mask says which pixels a basher, miner, digger, builder, or explosion changes. Keeping exact masks is one reason interactions align with the original artwork instead of merely looking similar.</p>
+<div class="section-rule" aria-hidden="true"><span></span></div>
+</section>
+<section class="chapter" id="8-converting-data-instead-of-decoding-it-on-playdate"><div class="chapter-number">8</div>
+<h2>8. Converting data instead of decoding it on Playdate</h2>
+<p>The Playdate should spend its limited CPU and memory running the game, not repeatedly understanding several 1991 file formats. The desktop converter transforms the verified DOS files into one purpose-built file named <code>lemmings.lpd</code>.</p>
+<p>The format begins with the magic value <code>LPD1</code> and currently uses version 6. “Magic” is a short identifying byte sequence that lets a loader reject the wrong kind of file.</p>
+<p>The pack contains:</p>
+<ul>
+<li>A source-data digest</li>
+<li>All 120 canonical level records</li>
+<li>Compressed terrain visual planes</li>
+<li>A collision plane and steel plane</li>
+<li>Object placements and metadata</li>
+<li>A deduplicated lemming/object sprite atlas</li>
+<li>Original action-panel artwork and digits</li>
+<li>Exact terrain-edit masks</li>
+<li>The explosion-particle table</li>
+<li>The decompressed AdLib command image</li>
+</ul>
+<h3 id="determinism">Determinism</h3>
+<p>The converter is deterministic: the same verified input produces the same output bytes. Determinism makes bugs reproducible and permits exact hashes in validation records.</p>
+<h3 id="packbits-compression">PackBits compression</h3>
+<p>Level bitplanes contain long repeated regions, making a simple run-length format effective. The project uses deterministic PackBits-style encoding:</p>
+<ul>
+<li>Literal records copy a sequence of different bytes.</li>
+<li>Repeated records store a byte once plus a repeat count.</li>
+</ul>
+<p>Tests cover literal and repeated-run boundaries, malformed input, truncated input, trailing data, and byte-for-byte round trips.</p>
+<h3 id="streaming-within-a-fixed-budget">Streaming within a fixed budget</h3>
+<p>Each 1,600 by 160 one-bit plane contains 32,000 bytes. The native loader decompresses through a bounded 1 KiB streaming reader into fixed gameplay buffers. It does not need to load an entire compressed source file and several temporary copies at once.</p>
+<h3 id="deduplicating-sprites">Deduplicating sprites</h3>
+<p>Identical encoded animation frames share atlas storage. If two logical frames contain the same mask and pixels, only one copy is stored. Together with compressed level planes and excluding Simulator-only binaries from device packages, this helped keep the private device build around 2.84 MB—roughly 90 percent of the project’s 3 MiB target.</p>
+<div class="section-rule" aria-hidden="true"><span></span></div>
+</section>
+<section class="chapter" id="9-rebuilding-the-game-rules-in-portable-c"><div class="chapter-number">9</div>
+<h2>9. Rebuilding the game rules in portable C</h2>
+<p>The core engine in <code>playdate/core/lp_game.c</code> does not know about Playdate buttons, screen drawing, files, or menus. It owns the simulation.</p>
+<p>The platform-independent model includes:</p>
+<ul>
+<li>Up to 100 lemmings</li>
+<li>Position and direction</li>
+<li>Current action state and animation frame</li>
+<li>Permanent climber and floater abilities</li>
+<li>Bomber countdown</li>
+<li>Fall distance</li>
+<li>Release timing and rate</li>
+<li>Mutable terrain and steel</li>
+<li>Active traps and exits</li>
+<li>Skill inventory</li>
+<li>Alive, released, rescued, and lost counts</li>
+<li>Clock, nuke sequence, win, and loss state</li>
+<li>A bounded queue of semantic sound events</li>
+</ul>
+<h3 id="fixed-tick-simulation">Fixed-tick simulation</h3>
+<p>The game advances at 17 logic ticks per second, matching the DOS-compatible rate identified for the original game.</p>
+<p>A fixed tick means game rules advance in equal logical steps even if screen drawing fluctuates slightly. The Playdate adapter accumulates real elapsed time and runs complete game ticks when enough time has accumulated.</p>
+<div class="code-frame diagram"><pre><code class="language-text">Real time arrives
+      |
+Accumulate elapsed seconds
+      |
+While at least 1/17 second is available:
+    update one complete game tick
+      |
+Draw the current state</code></pre></div>
+<p>This makes physics reproducible and testable. A level behaves the same whether a frame took slightly longer to draw.</p>
+<h3 id="state-machines">State machines</h3>
+<p>Each lemming is a small state machine. A state machine is a system that is in one named condition at a time and follows defined rules to move to another.</p>
+<p>For example:</p>
+<div class="code-frame diagram"><pre><code class="language-text">WALK --&gt; FALL --&gt; WALK
+  |       |
+  |       +--&gt; FLOAT --&gt; WALK
+  |
+  +--&gt; BASH --&gt; WALK or FALL</code></pre></div>
+<p>The actual engine supports walking, falling, climbing, floating, blocking, building, bashing, mining, digging, bomber countdown, “Oh no,” explosion, splatting, drowning, burning, and exiting.</p>
+<p>Every tick processes the current state, checks terrain and objects, mutates terrain when required, advances animation, and transitions only according to explicit rules.</p>
+<h3 id="terrain-as-both-pixels-and-rules">Terrain as both pixels and rules</h3>
+<p>The visible landscape is also collision data. Skills modify the solid plane using original masks. Those edits are propagated to all terrain visual planes, so switching dither modes cannot restore pixels already dug away.</p>
+<p>Steel is stored separately. Destructive skills consult it before removing terrain. One-way terrain and blocker interactions are similarly game rules, not just artwork.</p>
+<h3 id="selection-fidelity">Selection fidelity</h3>
+<p>Selecting a moving eight-pixel character with a D-pad cursor is difficult if the hit area is only one visible pixel. The engine exposes the original-sized inclusive targeting footprint and whether the active skill can be assigned to that lemming.</p>
+<p>The Playdate draws a two-pixel-thick dark bounding box only when assignment is valid. It blends with existing dark pixels instead of inverting them, avoiding the shimmering appearance caused by an alternating black/white box.</p>
+<p>The basher case received special attention because a too-short eligible window made valid solutions impossible. Eligibility is evaluated from game state and nearby terrain, not merely from one animation frame.</p>
+<h3 id="bombing-and-nuking">Bombing and nuking</h3>
+<p>An individual bomber receives a five-real-second fuse. The countdown changes into the original “Oh no” pose, then the burst and particle animation remove terrain and eventually remove the lemming.</p>
+<p>Nuke follows DOS slot order, arming one eligible lemming per tick rather than assigning every fuse simultaneously. Each lemming still receives the complete five-second countdown.</p>
+<div class="section-rule" aria-hidden="true"><span></span></div>
+</section>
+<section class="chapter" id="10-adapting-a-wide-color-game-to-a-small-one-bit-display"><div class="chapter-number">10</div>
+<h2>10. Adapting a wide color game to a small one-bit display</h2>
+<p>The DOS gameplay world is 1,600 pixels wide and 160 pixels tall. Its usual viewport is 320 by 160. Playdate’s display is 400 by 240 and can show only black or white pixels.</p>
+<p>These constraints create competing goals:</p>
+<ul>
+<li>Show enough of the level to plan.</li>
+<li>Make tiny lemmings readable.</li>
+<li>Preserve original pixel shapes.</li>
+<li>Reserve space for useful status information.</li>
+<li>Avoid visual noise on a one-bit screen.</li>
+</ul>
+<h3 id="exact-2-gameplay">Exact 2× gameplay</h3>
+<p>Normal gameplay uses a 200 by 104 source-pixel crop below a fixed 32-pixel status panel. It is enlarged exactly 2×, filling 400 by 208 Playdate pixels.</p>
+<p>Each original pixel becomes a uniform 2 by 2 block:</p>
+<div class="code-frame"><pre><code class="language-text">Original pixel:       Playdate output:
+
+    #                    ##
+                         ##</code></pre></div>
+<p>This is integer scaling. There is no interpolation, smoothing, fractional resizing, or position-dependent resampling. Sprite edges therefore retain the same geometry as the source art.</p>
+<p>Earlier experiments showed why this matters. Arbitrary scaling can make one source pixel become one output pixel in one column and two in another. Thin arms, legs, tools, and animation offsets then appear inconsistent.</p>
+<h3 id="what-gets-dithered">What gets dithered</h3>
+<p>Dithering simulates shades using patterns of black and white pixels. The converter calculates luminance from the VGA palette and creates four terrain choices:</p>
+<ul>
+<li>Solid</li>
+<li>Dispersed Bayer 2×2</li>
+<li>Clustered 2×2</li>
+<li>Bayer 4×4</li>
+</ul>
+<p>The menu labels shorten these to Solid, Bayer 2, Cluster 2, and Bayer 4 so they fit the handheld interface.</p>
+<p>The pattern is anchored to world coordinates during conversion. If it were recomputed relative to the screen, scrolling would shift the pattern and make stationary ground shimmer.</p>
+<p>Terrain, special backgrounds, entrances, and exits receive matching visual planes. They are large environmental forms where tonal separation helps readability.</p>
+<p>Lemmings are handled differently. Their exact source transparency masks are retained, and every opaque source pixel is drawn black. This preserves pale hands and feet that would disappear under a simple brightness threshold. Animated objects use a stable luminance threshold rather than changing dither phases. Action-menu sprite art is clear and undithered.</p>
+<p>This selective policy is a central quality decision: do not apply one conversion rule indiscriminately to every asset.</p>
+<h3 id="camera-behavior">Camera behavior</h3>
+<p>The cursor moves through source-pixel coordinates. Pushing it toward a screen edge scrolls the camera. Horizontal movement stops at visible terrain/object bounds plus a 24-source-pixel margin, preventing infinite scrolling into empty space.</p>
+<p>The original start-scroll value was authored for a 320-pixel viewport. Reusing it in the narrower 200-source-pixel detail view left the entrance partly or fully off screen in 13 levels. The port instead centers on the entrance hatch, clamped to the valid world area. All 120 levels now open with the hatch fully visible; 108 can place it exactly in the center.</p>
+<h3 id="native-menus-around-a-faithful-game-view">Native menus around a faithful game view</h3>
+<p>The DOS menu resolution did not need to constrain every Playdate screen. Title, credits, difficulty selection, level cards, results, and system menus use the full native 400 by 240 display.</p>
+<p>The gameplay itself remains the exact 2× source view. This gives fidelity where source pixels matter and usability where Playdate conventions matter.</p>
+<p>The level browser exposes all four original ratings, terrain previews, rescue requirements, time, skill counts, completion status, and saved progression. The action panel pauses gameplay and provides release rate, all eight skills, pause, and nuke in a 6 by 2 layout. Original DOS action art is used where suitable, with the Lynx version informing handheld interaction and supplying selected control art.</p>
+<p>The crank is adapted contextually:</p>
+<ul>
+<li>During gameplay it fast-forwards simulation, capped at 4× total speed.</li>
+<li>In the paused action panel it adjusts release rate.</li>
+<li>In the level browser it moves between levels.</li>
+</ul>
+<p>This is a blend of original content, Lynx-inspired directness, and native Playdate interaction.</p>
+<div class="section-rule" aria-hidden="true"><span></span></div>
+</section>
+<section class="chapter" id="11-recreating-adlib-music-instead-of-storing-recordings"><div class="chapter-number">11</div>
+<h2>11. Recreating AdLib music instead of storing recordings</h2>
+<p>The music system is one of the port’s most technically distinctive features.</p>
+<h3 id="what-adlib-music-is">What AdLib music is</h3>
+<p>An AdLib card contains an OPL2 FM-synthesis chip. FM synthesis creates tones mathematically by combining oscillators. Games control it by writing values to hardware registers that set instruments, pitches, volumes, envelopes, and key-on/key-off events.</p>
+<p>The game’s <code>ADLIB.DAT</code> is therefore not a folder of WAV recordings. It contains a compressed 22,125-byte Sound Images memory image with command streams and tables.</p>
+<p>The project preserves the commands and synthesizes them in real time.</p>
+<div class="code-frame diagram"><pre><code class="language-text">ADLIB.DAT commands
+       |
+Sound Images command interpreter
+       |
+OPL2 register writes
+       |
+DOSBox DBOPL chip model
+       |
+PCM samples heard by Playdate</code></pre></div>
+<p>This avoids the storage cost and loop seams of long pre-rendered recordings. More importantly, it preserves the original control flow, including voices that loop independently.</p>
+<h3 id="independent-research-oracles">Independent research oracles</h3>
+<p>Audio routing initially sounded recognizable but incorrect. To avoid tuning by ear alone, the project created independent implementations:</p>
+<ul>
+<li>A Python Sound Images command interpreter</li>
+<li>A JavaScript reference player used as an oracle</li>
+<li>A clean C interpreter for the Playdate runtime</li>
+<li>A thin C-to-C++ wrapper around the pinned DOSBox DBOPL core</li>
+</ul>
+<p>An oracle is an independent implementation or source of truth used to judge another implementation.</p>
+<p>All 21 music streams and 18 AdLib effect streams were compared for 10,000 timer steps. The clean interpreter’s register stream matched the independent player byte for byte. The complete Fun 1 command cycle contains 4,609 steps and was also matched byte for byte.</p>
+<p>A one-second native render is pinned to an exact FNV-1a hash. That test catches errors that command-level comparisons alone might miss in synthesis or sample scheduling.</p>
+<h3 id="finding-exact-loop-points">Finding exact loop points</h3>
+<p>A loop should not be guessed by trimming silence or listening for a beat. Some tracks have introductions, and different OPL voices can loop on different schedules.</p>
+<p>The research interpreter records the complete command-interpreter state. It searches for the first state that repeats exactly. The repeated state defines the true command-cycle boundary.</p>
+<p>For Fun 1, the cycle is approximately 59.04 seconds. Another track, Lemming 2, has a much longer combined voice cycle. Using exact state repetition eliminates audible gaps and incorrect early restarts.</p>
+<h3 id="avoiding-harshness-and-clipping">Avoiding harshness and clipping</h3>
+<p>The approved path uses DBOPL’s raw 32-bit output and applies controlled scaling instead of inheriting a clipping mixer. Validation renders found zero clipped synthesis samples across all 39 command streams.</p>
+<p>Two gentle fixed-point low-pass stages soften the final signal. This reduces harsh high-frequency energy without replacing the underlying OPL character.</p>
+<div class="section-rule" aria-hidden="true"><span></span></div>
+</section>
+<section class="chapter" id="12-why-device-audio-was-harder-than-simulator-audio"><div class="chapter-number">12</div>
+<h2>12. Why device audio was harder than Simulator audio</h2>
+<p>The Simulator runs on a Mac with far more processing power than the Playdate. Audio that is perfect in the Simulator can run slowly, detune, distort, or stutter on the physical handheld if synthesis cannot finish before the audio hardware needs more samples.</p>
+<p>Gameplay remaining smooth while music slowed was an important diagnostic clue: the simulation was healthy, but the audio production path was missing deadlines.</p>
+<h3 id="reference-rate-and-device-rate">Reference rate and device rate</h3>
+<p>The reference synthesis rate is 49,716 Hz. On device, running the full DBOPL workload at that rate alongside gameplay was too expensive.</p>
+<p>The optimized device path synthesizes at 22,050 Hz, safely above its final 8.5 kHz passband, then uses deterministic 2× linear interpolation for Playdate’s 44.1 kHz output callback.</p>
+<p>A fractional scheduler preserves the approved 49,716 Hz command timing rather than rounding every tick independently. The complete Fun 1 cycle differs by only two output frames over about 59.04 seconds.</p>
+<p>This is a controlled tradeoff: reduce the expensive chip-emulation rate while preserving musical event timing and filtering the output appropriately.</p>
+<h3 id="render-ahead-do-not-synthesize-in-the-callback">Render ahead, do not synthesize in the callback</h3>
+<p>Audio callbacks have hard deadlines. They should not allocate memory, read files, or perform unpredictable amounts of work.</p>
+<p>The final architecture uses a ring buffer:</p>
+<div class="code-frame diagram"><pre><code class="language-text">Main game loop                    SDK audio callback
+--------------                    ------------------
+Run DBOPL ahead                   Copy ready samples
+Fill ring buffer  -------------&gt;  Advance read index
+Aim for 6,144 frames              Zero-fill only on underrun</code></pre></div>
+<p>The ring holds 8,192 mono frames. The main update loop synthesizes toward a 6,144-frame high-water mark, approximately 139 milliseconds of queued audio. The SDK audio thread only copies already-published samples.</p>
+<p>Atomic producer and consumer indices prevent the two contexts from seeing half-updated state. Track changes flush safely. If the producer ever falls behind, the callback inserts zeroes and increments an underrun counter instead of reading invalid memory.</p>
+<p>This is why “put it on a dedicated thread” was not the complete answer. The useful design principle was to separate expensive production from deadline-sensitive consumption. The SDK callback already executes in the audio context; making that context do more work would not help.</p>
+<h3 id="sound-effects">Sound effects</h3>
+<p>Fifteen short effects are imported as IMA ADPCM. ADPCM is compressed audio suited to small clips. They are preloaded and played from a four-voice pool, eliminating trigger-time file reads.</p>
+<p>Most action effects retain the DOS AdLib character. The iconic spoken lines—“Let’s Go!”, “Oh no!”, and “Yippee!”—use original Amiga captures selected for their recognizable voices. Per-effect gains compensate for different recording levels so effects do not overpower the live music.</p>
+<p>Gameplay emits semantic events such as assignment, failure, splat, drowning, burning, exit, “Oh no,” and explosion. The portable core does not know which audio API will play them; the Playdate layer drains the bounded event queue and chooses the corresponding sound.</p>
+<div class="section-rule" aria-hidden="true"><span></span></div>
+</section>
+<section class="chapter" id="13-saving-progress-and-presenting-a-complete-game"><div class="chapter-number">13</div>
+<h2>13. Saving progress and presenting a complete game</h2>
+<p>Faithfulness is not limited to physics. A preservation port also needs a coherent path through the game.</p>
+<p>The <code>LPS1</code> save format stores completion bits and the last-played rating. A bit is a single binary value, making it compact to record whether each of 120 levels is complete.</p>
+<p>Within each rating, the player may select completed levels and the first incomplete level. All four difficulty ratings are available, matching the original ability to move between Fun, Tricky, Taxing, and Mayhem rather than forcing one uninterrupted sequence.</p>
+<p>The title screen preserves the complete logo and credits DMA Design for the original game. A detailed DOS credits screen is available separately. Completing the final Mayhem level displays the original salute to master Lemmings players.</p>
+<p>The system menu is contextual:</p>
+<ul>
+<li>Dither selection appears on the title screen.</li>
+<li>Choose Level and Reset Level appear during a level.</li>
+<li>Continue and Nuke are grouped under the game control.</li>
+</ul>
+<p>Contextual menus keep irrelevant options from cluttering the screen.</p>
+<div class="section-rule" aria-hidden="true"><span></span></div>
+</section>
+<section class="chapter" id="14-testing-the-preservation-claims"><div class="chapter-number">14</div>
+<h2>14. Testing the preservation claims</h2>
+<p>“It looks right to me” is useful feedback, but it is not enough for a preservation project. The port uses several kinds of tests.</p>
+<h3 id="unit-tests">Unit tests</h3>
+<p>Unit tests examine a small rule in isolation. Examples include:</p>
+<ul>
+<li>A PackBits stream round-trips exactly.</li>
+<li>A malformed archive is rejected.</li>
+<li>A lemming can receive a climber skill only when eligible.</li>
+<li>A 62-pixel fall survives and a 63-pixel fall does not.</li>
+<li>Progression unlocks the first incomplete level.</li>
+</ul>
+<h3 id="integration-tests">Integration tests</h3>
+<p>Integration tests verify that components work together. The asset tests build and reopen an entire pack. The host runner loads all 120 levels through the same bounded path used on Playdate.</p>
+<h3 id="smoke-tests">Smoke tests</h3>
+<p>A smoke test checks that a broad operation completes without obvious failure. Every level runs for 300 ticks while release and alive-count invariants are checked.</p>
+<h3 id="golden-and-oracle-tests">Golden and oracle tests</h3>
+<p>A golden test compares output against an approved exact result. Audio register traces and PCM hashes are examples. These tests are extremely good at catching tiny timing or routing changes.</p>
+<h3 id="what-is-covered">What is covered</h3>
+<p>The validation suite includes:</p>
+<ul>
+<li>All 71 preservation input hashes</li>
+<li>Known compressed-section shapes and failure cases</li>
+<li>Canonical 120-level ordering</li>
+<li>Pack structure and version</li>
+<li>Bounded level decompression</li>
+<li>Original sprite opacity masks</li>
+<li>Black lemming silhouettes</li>
+<li>Sprite atlas deduplication</li>
+<li>Terrain and portal dither planes</li>
+<li>Terrain edits propagated through every visual mode</li>
+<li>Sprite and object animation loading</li>
+<li>Spawning, movement, and release timing</li>
+<li>All eight skills</li>
+<li>Steel preservation and terrain destruction</li>
+<li>Selection bounds and assignment eligibility</li>
+<li>Traps and exits</li>
+<li>Sound-event transitions</li>
+<li>Five-second bombers and slot-ordered nuke</li>
+<li>Win and loss conditions</li>
+<li>Save progression</li>
+<li>All 39 AdLib streams over 10,000 timer steps</li>
+<li>Exact music command loops</li>
+<li>PCM golden output and clipping checks</li>
+<li>Ring-buffer producer/consumer behavior and underruns</li>
+<li>Host, Simulator, and ARM compilation with warnings treated as errors</li>
+</ul>
+<h3 id="why-real-device-testing-still-mattered">Why real device testing still mattered</h3>
+<p>Automated tests proved data and logic, but only physical hardware exposed the real-time audio budget. Human play also found usability and fidelity problems that were difficult to predict from isolated tests.</p>
+<p>The best workflow used both:</p>
+<div class="code-frame"><pre><code class="language-text">Automated checks catch known rules and regressions.
+Human comparison discovers missing rules and perceptual problems.
+New discoveries become automated checks whenever possible.</code></pre></div>
+<div class="section-rule" aria-hidden="true"><span></span></div>
+</section>
+<section class="chapter" id="15-iteration-was-part-of-the-reverse-engineering"><div class="chapter-number">15</div>
+<h2>15. Iteration was part of the reverse engineering</h2>
+<p>The Git history shows that fidelity emerged through repeated, focused corrections rather than one final rewrite.</p>
+<p>Selected milestones include:</p>
+<div class="table-wrap"><table><thead><tr><th>Commit</th><th>Improvement</th></tr></thead><tbody><tr><td><code>63ca58b</code></td><td>Initial preservation port, converter, portable engine, tests, and Playdate adapter</td></tr><tr><td><code>032e903</code></td><td>Pixel-perfect detail rendering</td></tr><tr><td><code>e4fdab7</code></td><td>Selectable dithering and exact music loops</td></tr><tr><td><code>2813e2a</code></td><td>Native audio and complete Playdate presentation</td></tr><tr><td><code>4957a9b</code></td><td>Complete action panel and level flow</td></tr><tr><td><code>d42e736</code></td><td>Corrected clock and HUD counters</td></tr><tr><td><code>55e246f</code></td><td>Redesigned release-rate control</td></tr><tr><td><code>776c8e3</code></td><td>Corrected fall-distance accounting</td></tr><tr><td><code>0917287</code></td><td>Fixed the first-lemming release delay</td></tr><tr><td><code>2dca6cb</code></td><td>Tuned falling to 2.2 source pixels per tick on average</td></tr><tr><td><code>18c4409</code></td><td>Centered opening views on entrance hatches</td></tr></tbody></table></div>
+<p>Several lessons recur in these changes.</p>
+<h3 id="perceptual-correctness-is-measurable">Perceptual correctness is measurable</h3>
+<p>“Falling feels absurdly fast” begins as subjective feedback. It becomes engineering when speed is expressed using named constants, animation cadence is tied to travelled distance, and fatal-distance tests remain valid when those constants change.</p>
+<h3 id="platform-changes-expose-hidden-assumptions">Platform changes expose hidden assumptions</h3>
+<p>The DOS start-scroll value was not wrong. It assumed a 320-pixel viewport. The Playdate’s exact 2× crop is only 200 source pixels wide. Centering on the hatch preserved the intent under a new viewport.</p>
+<h3 id="exact-data-is-better-than-imitation">Exact data is better than imitation</h3>
+<p>Using original masks, poses, particle coordinates, music command streams, level records, and palettes eliminated entire categories of approximation.</p>
+<h3 id="selective-adaptation-is-better-than-dogma">Selective adaptation is better than dogma</h3>
+<p>The port preserves gameplay pixels exactly but uses native-resolution menus. It preserves OPL commands but lowers the chip-emulation rate on hardware. It keeps original progression while adding a Playdate-friendly level browser. Fidelity is preservation of the experience and rules, not blind preservation of every old limitation.</p>
+<div class="section-rule" aria-hidden="true"><span></span></div>
+</section>
+<section class="chapter" id="16-why-the-result-is-so-faithful"><div class="chapter-number">16</div>
+<h2>16. Why the result is so faithful</h2>
+<p>The port’s quality comes from the combination of several choices.</p>
+<ol>
+<li><strong>The inputs are pinned.</strong> Every claim refers to a known version of the game.</li>
+<li><strong>Original data is converted, not manually recreated.</strong> Levels, placements, masks, sprites, palettes, and command streams retain their authored structure.</li>
+<li><strong>The executable is treated as evidence.</strong> Important tables and timing behavior are recovered from the actual program rather than memory or folklore.</li>
+<li><strong>Rules are written in source-pixel units and fixed ticks.</strong> Rendering changes do not silently change physics.</li>
+<li><strong>Pixel scaling is exact.</strong> Tiny sprite geometry is never interpolated.</li>
+<li><strong>Dithering is selective and world-anchored.</strong> Ground gains tone without making moving art shimmer.</li>
+<li><strong>Music is synthesized from original commands.</strong> There are no arbitrary recording lengths or PCM loop seams.</li>
+<li><strong>Independent audio implementations cross-check one another.</strong> A bug is less likely to agree across separately written interpreters.</li>
+<li><strong>The core is portable and testable away from Playdate.</strong> Game logic can be exercised quickly on a desktop.</li>
+<li><strong>Human observations become regression tests.</strong> Bugs that mattered in real levels were turned into permanent boundaries.</li>
+<li><strong>The hardware is respected.</strong> Audio buffering, fixed memory, compression, and native UI address the real device rather than assuming Simulator behavior.</li>
+<li><strong>Claims remain honest.</strong> The project calls DOS-exactness a validation target where frame-perfect golden replay comparison is not yet complete.</li>
+</ol>
+<p>The final point matters. A high-quality preservation project documents both what has been proven and what remains a target. Confidence comes from evidence, not from using the word “perfect.”</p>
+<div class="section-rule" aria-hidden="true"><span></span></div>
+</section>
+<section class="chapter" id="17-reproducing-the-research-and-build-workflow"><div class="chapter-number">17</div>
+<h2>17. Reproducing the research and build workflow</h2>
+<p>The public repository deliberately excludes original game data, imported recordings, launcher art, generated packs, and private decompiler output. A reader must supply a legally obtained compatible DOS copy and required private assets.</p>
+<h3 id="development-environment">Development environment</h3>
+<p>On a Nix-capable system:</p>
+<div class="code-frame"><pre><code class="language-sh">nix develop
+make playdate-sdk</code></pre></div>
+<p>The pinned environment supplies Clang, Python with Pillow, FFmpeg, Node, ZIP tools, and the ARM compiler. The SDK target fetches the pinned Playdate SDK into an ignored build directory.</p>
+<p>For reverse engineering tools:</p>
+<div class="code-frame"><pre><code class="language-sh">nix develop .#decompile</code></pre></div>
+<p>This adds Ghidra, a Java Development Kit, and <code>ndisasm</code>.</p>
+<h3 id="verify-the-original-files">Verify the original files</h3>
+<div class="code-frame"><pre><code class="language-sh">make verify-reference</code></pre></div>
+<p>Run this first. If it fails, do not assume later offsets or output are valid. Determine whether a file is missing, extra, or from another release.</p>
+<h3 id="build-converted-assets">Build converted assets</h3>
+<div class="code-frame"><pre><code class="language-sh">make assets</code></pre></div>
+<p>This verifies the reference set, decodes the original files, builds the canonical level sequence, composes and dithers graphics, constructs the sprite atlas, extracts exact tables, and writes the versioned <code>LPD1</code> pack under <code>generated/</code>.</p>
+<h3 id="run-automated-tests">Run automated tests</h3>
+<div class="code-frame"><pre><code class="language-sh">make test</code></pre></div>
+<p>This runs Python conversion/audio tests and native core tests. Warnings are treated as errors so suspicious C or C++ code does not quietly enter a build.</p>
+<h3 id="run-all-levels-on-the-desktop">Run all levels on the desktop</h3>
+<div class="code-frame"><pre><code class="language-sh">make host</code></pre></div>
+<p>The host program loads and smoke-simulates all 120 levels. This is much faster than manually opening every level on the handheld.</p>
+<h3 id="rebuild-the-private-decompilation-workspace">Rebuild the private decompilation workspace</h3>
+<div class="code-frame"><pre><code class="language-sh">make decompile</code></pre></div>
+<p>This verifies the source executable, unpacks it reproducibly, writes a flat 16-bit disassembly, creates a Ghidra project, and exports private pseudocode beneath <code>preservation/private/</code>.</p>
+<h3 id="render-independent-audio-references">Render independent audio references</h3>
+<div class="code-frame"><pre><code class="language-sh">make audio REFERENCE_PLAYER=/path/to/local/lemmings.js</code></pre></div>
+<p>The local reference player is intentionally not part of the public repository. The command interpreter and DBOPL oracle produce traces and renders used to validate routing, timing, loops, and synthesis.</p>
+<h3 id="import-sound-effects">Import sound effects</h3>
+<div class="code-frame"><pre><code class="language-sh">make effects EFFECTS_ARCHIVE=/path/to/LemmingsVersionsNLSounds.zip</code></pre></div>
+<p>The importer verifies the accepted archive by SHA-256, chooses the intended DOS effects and Amiga speech, converts them to IMA ADPCM, and stages the 15 runtime clips.</p>
+<h3 id="build-for-simulator">Build for Simulator</h3>
+<div class="code-frame"><pre><code class="language-sh">make simulator PLAYDATE_SDK_PATH=/path/to/PlaydateSDK
+make playdate-run</code></pre></div>
+<p>The first command compiles and stages the Simulator package. The second builds and launches it.</p>
+<h3 id="build-for-a-physical-playdate">Build for a physical Playdate</h3>
+<div class="code-frame"><pre><code class="language-sh">make playdate PLAYDATE_SDK_PATH=/path/to/PlaydateSDK</code></pre></div>
+<p>Device builds require a complete Arm GNU Toolchain with newlib and C++ support. If it is not first on the shell’s path, provide <code>ARM_TOOLCHAIN_PATH</code> explicitly.</p>
+<h3 id="package-a-release">Package a release</h3>
+<div class="code-frame"><pre><code class="language-sh">make release PLAYDATE_SDK_PATH=/path/to/PlaydateSDK</code></pre></div>
+<p>The release process advances the semantic patch version and Playdate build number together, writes the PDX, and creates an upload-ready ZIP. Test-unlock builds contain a marker that the release packager refuses, preventing an internal all-level build from being published accidentally.</p>
+<div class="section-rule" aria-hidden="true"><span></span></div>
+</section>
+<section class="chapter" id="18-common-problems-and-what-they-teach"><div class="chapter-number">18</div>
+<h2>18. Common problems and what they teach</h2>
+<h3 id="ghidra-shows-nonsense">Ghidra shows nonsense</h3>
+<p>Confirm that the executable was unpacked successfully, that its raw size is exactly 82,906 bytes, that the processor is 16-bit x86 real mode, and that address zero was seeded as an entry point. Wrong load assumptions can make valid machine code look meaningless.</p>
+<h3 id="converted-graphics-have-the-wrong-colors">Converted graphics have the wrong colors</h3>
+<p>Indexed pixels only make sense with the correct palette. Decode the palette from the matching graphics set, preserve masks separately, and test known frames. Do not infer transparency from a color value when an explicit source mask exists.</p>
+<h3 id="sprites-look-uneven">Sprites look uneven</h3>
+<p>Check for fractional scaling, smoothing, or screen-relative dithering. Exact 2× nearest-neighbor expansion should create four identical output pixels for every source pixel.</p>
+<h3 id="music-resembles-the-original-but-notes-or-instruments-are-wrong">Music resembles the original but notes or instruments are wrong</h3>
+<p>Compare the complete OPL register stream against an independent oracle. Listening alone cannot easily distinguish a bad instrument-table offset, wrong channel routing, incorrect timing, or incorrect track mapping.</p>
+<h3 id="music-loops-with-a-gap">Music loops with a gap</h3>
+<p>Find a repeated full interpreter state, not merely a visually similar waveform point. Independent voices may make the true cycle much longer than the melody suggests.</p>
+<h3 id="simulator-audio-is-good-but-device-audio-is-slow-or-distorted">Simulator audio is good but device audio is slow or distorted</h3>
+<p>Measure underruns and reduce work performed in the audio callback. Render ahead, preallocate memory, preload effects, use a ring buffer, and consider a lower synthesis rate with deterministic conversion.</p>
+<h3 id="a-single-lemming-behaves-differently-after-using-a-skill">A single lemming behaves differently after using a skill</h3>
+<p>Inspect transition bookkeeping. State changes may initialize counters or positions differently from a lemming that enters the same state naturally. Test the exact level scenario and both sides of any distance boundary.</p>
+<div class="section-rule" aria-hidden="true"><span></span></div>
+</section>
+<section class="chapter" id="19-preservation-and-licensing-boundaries"><div class="chapter-number">19</div>
+<h2>19. Preservation and licensing boundaries</h2>
+<p>This project’s portable engine, Playdate adapter, converter, and documentation are newly written code. They are licensed under the project’s MIT terms.</p>
+<p>DBOPL is derived from DOSBox and is licensed under GPL-2.0-or-later. Because DBOPL is linked into the built game, distributed binaries must meet the applicable GPL source and build-instruction obligations described in <code>LICENSING.md</code>.</p>
+<p>Original game data, art, levels, music data, recordings, names, and other third-party material are not relicensed by the project. The current public repository therefore excludes:</p>
+<ul>
+<li><code>reference/</code></li>
+<li>Generated packs and builds</li>
+<li>Private Ghidra output</li>
+<li>Imported sound recordings</li>
+<li>Original or derived launcher artwork</li>
+</ul>
+<p>This document describes the method but does not distribute those materials and is not legal advice. Anyone repeating the work should use a lawfully obtained copy and understand the rules applying in their jurisdiction and distribution context.</p>
+<div class="section-rule" aria-hidden="true"><span></span></div>
+</section>
+<section class="chapter" id="20-lessons-for-another-preservation-port"><div class="chapter-number">20</div>
+<h2>20. Lessons for another preservation port</h2>
+<p>For someone beginning a similar project, the most transferable checklist is:</p>
+<ol>
+<li>Identify one exact reference version and hash every input.</li>
+<li>Never modify the reference files.</li>
+<li>Separate private evidence from publishable implementation.</li>
+<li>Automate unpacking and tool versions so analysis can be reproduced.</li>
+<li>Learn the data formats before redrawing or approximating assets.</li>
+<li>Keep game rules independent of rendering and platform APIs.</li>
+<li>Express timing in fixed logical ticks and distances in source units.</li>
+<li>Use exact masks and tables when they exist.</li>
+<li>Create at least one independent oracle for difficult subsystems.</li>
+<li>Turn every confirmed bug into a regression test.</li>
+<li>Test on real hardware early, especially audio and memory behavior.</li>
+<li>Adapt controls and menus intentionally while preserving game semantics.</li>
+<li>Record what is proven, what is inferred, and what still needs comparison.</li>
+<li>Keep builds deterministic and validate their hashes and sizes.</li>
+<li>Treat human playtesting as evidence generation, not as a substitute for tests.</li>
+</ol>
+<div class="section-rule" aria-hidden="true"><span></span></div>
+</section>
+<section class="chapter" id="conclusion"><div class="chapter-number">◆</div>
+<h2>Conclusion</h2>
+<p>This Playdate port became extremely faithful because it did not rely on a single technique.</p>
+<p>Decompilation helped expose hidden executable behavior. File-format work recovered authored data. A deterministic converter made that data practical on the handheld. A clean fixed-tick C engine expressed the rules clearly. Exact integer rendering protected the sprite art. Selective world-anchored dithering solved the one-bit display problem. Real-time OPL2 synthesis preserved the musical programs. Independent oracles and regression tests made subtle claims measurable. Finally, repeated Simulator and device play turned perceptual problems into concrete engineering corrections.</p>
+<p>The project is therefore best understood not as “running decompiled Lemmings on Playdate,” but as a layered preservation effort:</p>
+<blockquote><span class="quote-mark">“</span><p>Preserve the evidence, recover the rules, retain the authored data, reimplement the system cleanly, adapt only where the new hardware requires it, and verify every important claim.</p></blockquote>
+<p>That combination is what allowed a game designed for a 1991 DOS PC to feel at home on a tiny 2020s handheld without losing the character, timing, challenge, artwork, or sound that made the original recognizable.</p>
+<div class="section-rule" aria-hidden="true"><span></span></div>
+</section>
+<section class="chapter" id="repository-reference-map"><div class="chapter-number">◆</div>
+<h2>Repository reference map</h2>
+<p>The following files are useful companions to this document:</p>
+<div class="table-wrap"><table><thead><tr><th>File or directory</th><th>What to study</th></tr></thead><tbody><tr><td><code>README.md</code></td><td>Current build requirements, controls, and public/private boundaries</td></tr><tr><td><code>docs/PORT.md</code></td><td>Architecture and current fidelity policy</td></tr><tr><td><code>docs/VALIDATION.md</code></td><td>Exact automated and artifact validation record</td></tr><tr><td><code>preservation/README.md</code></td><td>Preservation workflow and inventory findings</td></tr><tr><td><code>preservation/prepare_decomp.py</code></td><td>Reproducible PKLITE unpacking and Ghidra setup</td></tr><tr><td><code>preservation/ghidra_scripts/</code></td><td>Entry-point seeding and private pseudocode export</td></tr><tr><td><code>preservation/music.md</code></td><td>Executable evidence for music selection</td></tr><tr><td><code>tools/assetc/</code></td><td>Level, graphics, sprite, and pack conversion</td></tr><tr><td><code>tools/audio/</code></td><td>Independent Sound Images interpretation and reference rendering</td></tr><tr><td><code>playdate/core/lp_game.c</code></td><td>Portable fixed-tick gameplay simulation</td></tr><tr><td><code>playdate/core/lp_adlib.c</code></td><td>Runtime command interpreter, scheduling, filtering, and ring buffer</td></tr><tr><td><code>playdate/src/main.c</code></td><td>Playdate-specific drawing, input, menus, saves, and sound playback</td></tr><tr><td><code>playdate/tests/</code></td><td>Gameplay, progression, DBOPL, and callback-audio tests</td></tr><tr><td><code>CHANGELOG.md</code></td><td>Release-level account of fidelity improvements</td></tr><tr><td><code>LICENSING.md</code></td><td>MIT, DBOPL GPL, font, and original-material boundaries</td></tr></tbody></table></div>
+</section></main>
+  </div>
+  <footer class="footer">
+    <div class="footer-inner">
+      <strong>Preserve the evidence. Recover the rules. Adapt with intent.</strong>
+      <p>This document describes the engineering process without distributing original game data or private decompiler output.</p>
+      <a class="back-top" href="#top">↑ Back to top</a>
+    </div>
+  </footer>
+  <script>
+const bar = document.querySelector('.progress span');
+const links = [...document.querySelectorAll('.toc a')];
+const sections = links.map(link => document.querySelector(link.hash)).filter(Boolean);
+function update() {
+  const max = document.documentElement.scrollHeight - innerHeight;
+  bar.style.width = (max > 0 ? scrollY / max * 100 : 0) + '%';
+  let current = sections[0];
+  for (const section of sections) if (section.getBoundingClientRect().top <= 120) current = section;
+  links.forEach(link => link.classList.toggle('active', current && link.hash === '#' + current.id));
+}
+addEventListener('scroll', update, {passive: true});
+update();
+</script>
+</body>
+</html>
