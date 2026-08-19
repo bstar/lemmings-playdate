@@ -1,5 +1,8 @@
 # Lemmings preservation and Playdate port
 
+**[Project website](https://bstar.github.io/lemmings-playdate/)** ·
+**[Read the decompilation and Playdate engineering deep dive](https://bstar.github.io/lemmings-playdate/blog/decompiling-lemmings/)**
+
 A clean-room engine and asset converter that run the original DOS levels on the
 Playdate. This repository contains only the new implementation:
 
